@@ -11,6 +11,7 @@ public class RectangleSpawner : MonoBehaviour
 
         set
         {
+            //Синглтон шаблон
             if(instance == null)
             {
                 instance = value;
@@ -33,10 +34,10 @@ public class RectangleSpawner : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetMouseButtonDown(0))
+        //Создание прямоугольника при левом клике
+        if (!aboveRectangle && Input.GetMouseButtonDown(0))
         {
-            if(!aboveRectangle)
-                SpawnRectangle();
+            SpawnRectangle();
         }
     }
 
@@ -48,7 +49,6 @@ public class RectangleSpawner : MonoBehaviour
 
         if (Physics2D.OverlapBox(v3, new Vector2(8, 4), 0) == null)
         {
-
             GameObject obj = Instantiate(rectanglePrefab);
 
             obj.transform.position = v3;
