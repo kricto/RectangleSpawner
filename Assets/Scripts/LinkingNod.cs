@@ -6,16 +6,14 @@ public class LinkingNod : MonoBehaviour
 {
     [SerializeField] private Rigidbody2D myRigidbody;
 
+    private const int numberOfHits = 3;
+    private const int distanceInFrontOfCamera = 10;
+
     private Vector3 mousePosition;
-    private ContactFilter2D filter;
-    private List<RaycastHit2D> hitBufferList = new List<RaycastHit2D>(3);
+    private ContactFilter2D filter = new ContactFilter2D();
+    private List<RaycastHit2D> hitBufferList = new List<RaycastHit2D>(numberOfHits);
 
-    private void Awake()
-    {
-        filter = new ContactFilter2D();
-        filter.useTriggers = false;
-    }
-
+    //Движение узла мышкой
     private void OnMouseDrag()
     {
         UpdateMousePosition();
@@ -23,33 +21,31 @@ public class LinkingNod : MonoBehaviour
         transform.position = mousePosition;
     }
 
+    //Когда отпускаем левую кнопку, надо проверить что было под курсором
     private void OnMouseUp()
     {
-        RaycastHit2D[] hits = new RaycastHit2D[3];
+        RaycastHit2D[] hits = new RaycastHit2D[numberOfHits];
 
-        int count = myRigidbody.Cast(Vector2.zero, filter, hits);
+        int count = myRigidbody.Cast(Vector2.zero, filter, hits); //Получаем всех под курсором проектируя все коллайдеры в область под собой
 
         hitBufferList.Clear();
 
         for (int i = 0; i < count; i++)
         {
-            hitBufferList.Add(hits[i]);
+            hitBufferList.Add(hits[i]); //Переводим в лист не нуловые взаимодействия
         }
 
         foreach (RaycastHit2D hit in hitBufferList)
         {
-            if (hit.transform.position != transform.position)
-            {
-                GetComponentInParent<RectangleUnit>().CreateLink(hit.transform);
-            }
+            GetComponentInParent<RectangleUnit>().CreateLink(hit.transform); //Создаем связи со всеми, кого коснулись
         }
 
-        transform.localPosition = Vector3.zero;
+        transform.localPosition = Vector3.zero; //Возвращаем узел на стартовую позицию
     }
 
     private void UpdateMousePosition()
     {
-        mousePosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10);
+        mousePosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, distanceInFrontOfCamera);
         mousePosition = Camera.main.ScreenToWorldPoint(mousePosition);
     }
 }

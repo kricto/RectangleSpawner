@@ -17,6 +17,8 @@ public class RectangleUnit : MonoBehaviour
     private const float shellRadius = .01f;
     private const float clickCooldown = .2f;
 
+    private const int maxCollisions = 7;
+
     private float clickTimer = .0f;
 
     private Vector3 clickOffset;
@@ -25,11 +27,12 @@ public class RectangleUnit : MonoBehaviour
 
     private Transform connectedObj;
 
-    private RaycastHit2D[] hitBuffer = new RaycastHit2D[6];
-    private List<RaycastHit2D> hitBufferList = new List<RaycastHit2D>(6);
+    private RaycastHit2D[] hitBuffer = new RaycastHit2D[maxCollisions];
+    private List<RaycastHit2D> hitBufferList = new List<RaycastHit2D>(maxCollisions);
 
     public System.Action OnDestroy;
 
+    #region Движение прямоугольников
     private void FixedUpdate()
     {
         //Вызов главной функции движения, происходит в FixedUpdate для плавности
@@ -46,14 +49,16 @@ public class RectangleUnit : MonoBehaviour
     private void OnMouseDown()
     {
         UpdateMousePosition();
-        clickOffset = transform.position - mousePosition; //Сдвиг курсора относительно центра объекта, чтобы он не двигался пока курсор стоит на мыши
+        //Сдвиг курсора относительно центра объекта,
+        //чтобы он не двигался когда курсор изначально не стоял на центре прямоугольника
+        clickOffset = transform.position - mousePosition;
 
-        if ((Time.time - clickTimer) < clickCooldown)
+        if ((Time.time - clickTimer) < clickCooldown) //Ловим двойной клик
         {
             Invoke(nameof(DeleteRectangle), .1f); //Задержка удаления, чтобы пропустить клик и не создать прямоугольник в месте удаления
         }
 
-        clickTimer = Time.time;
+        clickTimer = Time.time; //Запоминаем время первого клика
     }
 
     private void OnMouseDrag()
@@ -71,43 +76,25 @@ public class RectangleUnit : MonoBehaviour
         RectangleSpawner.Instance.aboveRectangle = false;
     }
 
-    //Функция, в котором случайно задаются каналы RGB
-    public void ChangeColor()
-    {
-        myRenderer.color = new Color32((byte)Random.Range(0, 255),
-                                       (byte)Random.Range(0, 255),
-                                       (byte)Random.Range(0, 255),
-                                       255);
-
-        newPosition = transform.position;
-    }
-
-    //Функция для обновления положения курсора в глобальном пространстве
-    private void UpdateMousePosition()
-    {
-        mousePosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10);
-        mousePosition = Camera.main.ScreenToWorldPoint(mousePosition);
-    }
-
     private void MoveRectangle(Vector2 move)
     {
         float distance = move.magnitude;
 
-        if(distance > minMoveDistance)
+        if (distance > minMoveDistance)
         {
             //Проецирование всех коллайдеров на объекте наперёд и обнаружение коллизий с проекциями
             int count = myRigidbody.Cast(move, hitBuffer, distance + shellRadius);
-            
+
             hitBufferList.Clear();
-            
+
             for (int i = 0; i < count; i++)
             {
-                if(hitBuffer[i].collider != ignoreCollider)
-                    hitBufferList.Add(hitBuffer[i]);
+                if (hitBuffer[i].collider != ignoreCollider) //Игнорируем узел
+                    hitBufferList.Add(hitBuffer[i]); //Регистрируем не пустые коллизии
             }
 
             //Участок для проверки коллизий и последующее отталкивание прямоугольника
-            for(int i = 0; i < hitBufferList.Count; i++)
+            for (int i = 0; i < hitBufferList.Count; i++)
             {
                 float modifiedDistance = hitBufferList[i].distance - shellRadius;
                 distance = modifiedDistance < distance ? modifiedDistance : distance;
@@ -129,33 +116,61 @@ public class RectangleUnit : MonoBehaviour
 
         UpdateLink();
     }
+    #endregion
+
+    public void ChangeColor()
+    {
+        //Функция, в котором случайно задаются каналы RGB
+        myRenderer.color = new Color32((byte)Random.Range(0, 255),
+                                       (byte)Random.Range(0, 255),
+                                       (byte)Random.Range(0, 255),
+                                       255);
+
+        newPosition = transform.position;
+    }
+
+    private void UpdateMousePosition()
+    {
+        //Обновляем положение курсора в глобальном пространстве
+        mousePosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 10);
+        mousePosition = Camera.main.ScreenToWorldPoint(mousePosition);
+    }
 
     private void DeleteRectangle()
     {
-        OnDestroy?.Invoke();
+        //Удаление прямоугольника
+
+        OnDestroy?.Invoke(); //Подчищаем связи
+        
+        if(connectedObj != null)
+            connectedObj.GetComponent<RectangleUnit>().OnDestroy -= DestroyLink; //Отписываемся от других удалений связей
 
         Destroy(gameObject);
         RectangleSpawner.Instance.aboveRectangle = false;
     }
 
+    #region Связи между прямоугольниками
     public void CreateLink(Transform hitTransform)
     {
-        if(transform.position != hitTransform.position)
+        //Cоздание визуальной связи между прямоугольниками
+        if (transform.position != hitTransform.position)
         {
-            connectedObj = hitTransform;
-            UpdateLink();
-            connectedObj.GetComponent<RectangleUnit>().OnDestroy += DestroyLink;
+            connectedObj = hitTransform; //Запоминаем положение того с кем связались
+            UpdateLink(); //Обновляем положение точек
+            connectedObj.GetComponent<RectangleUnit>().OnDestroy += DestroyLink; //Подписываемся на событие удаления того с кем связались
 
-            nod.SetActive(false);
+            nod.SetActive(false); //Отключаем узел для связи, тк можем иметь одну связь
         }
         else
         {
-            DestroyLink();
+            DestroyLink(); //Обнуляем значения, если узел связи упал на нас самих
         }
     }
 
     private void UpdateLink()
     {
+        //Обновление положения точек связи между двумя прямоугольниками в LineRenderer
+        //Также вызывается при движении прямоугольника
         if (connectedObj != null)
         {
             line.SetPosition(0, transform.position);
@@ -165,8 +180,10 @@ public class RectangleUnit : MonoBehaviour
 
     private void DestroyLink()
     {
+        //Уничтожение визуальной связи, путем обнуления точек в LineRenderer
         line.SetPosition(0, transform.position);
         line.SetPosition(1, transform.position);
         nod.SetActive(true);
     }
+    #endregion
 }
